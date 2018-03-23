@@ -13,20 +13,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"strconv"
 )
 
-var errInvalidArguents = errors.New("sanitize: either field set or regexp must be provided")
+var errInvalidArguents = errors.New("sanitize: fn cannot not be nil")
 
-// Stream sanitizes json payload read from r writing result to w. fset is
-// a set of exact field names to be filtered, re is a regular expression to
-// match against field names to be filtered. Either of fset or re can be nil,
-// but not both. Matched string fields are replaced with Mask value.
+// Stream sanitizes json payload read from r writing result to w. fn must be
+// a non-nil FieldFunc called on each string key/value pair of json payload.
 //
-// For smaller messages it is more effective to use Message function.
-func Stream(w io.Writer, r io.Reader, fset map[string]struct{}, re *regexp.Regexp) error {
-	if re == nil && len(fset) == 0 {
+// For already allocated messages it is more effective to use Message function.
+func Stream(w io.Writer, r io.Reader, fn FieldFunc) error {
+	if fn == nil {
 		return errInvalidArguents
 	}
 	bw := bufio.NewWriter(w)
@@ -38,6 +35,7 @@ func Stream(w io.Writer, r io.Reader, fset map[string]struct{}, re *regexp.Regex
 	var sanitize bool
 	var prevDelim byte
 	var tmp []byte
+	var key string
 	for {
 		var delim byte = comma
 		t, err := dec.Token()
@@ -50,14 +48,15 @@ func Stream(w io.Writer, r io.Reader, fset map[string]struct{}, re *regexp.Regex
 		switch v := t.(type) {
 		case string:
 			if sanitize && prevDelim == ':' {
-				v = Mask
+				if val, ok := fn(key, v); ok {
+					v = val
+				}
 				sanitize = false
 			}
 			if cnt%2 != 0 && len(ds) > 0 && ds[len(ds)-1] == '{' {
 				delim = colon
-				if _, ok := fset[v]; ok || (re != nil && re.MatchString(v)) {
-					sanitize = true
-				}
+				key = v
+				sanitize = true
 			}
 			bw.Write(strconv.AppendQuote(tmp[:0], v))
 		case bool:
@@ -95,78 +94,6 @@ func Stream(w io.Writer, r io.Reader, fset map[string]struct{}, re *regexp.Regex
 	}
 }
 
-// Message sanitizes json payload from src and returns its sanitized
-// representation. If dst is non-nil, it is used as a scratch buffer to reduce
-// allocations. fset is a set of exact field names to be filtered, re is
-// a regular expression to match against field names to be filtered. Either of
-// fset or re can be nil, but not both. Matched string fields are replaced with
-// Mask value.
-func Message(dst, src []byte, fset map[string]struct{}, re *regexp.Regexp) ([]byte, error) {
-	if re == nil && len(fset) == 0 {
-		return nil, errInvalidArguents
-	}
-	if len(dst) > 0 {
-		dst = dst[:0]
-	}
-	dec := json.NewDecoder(bytes.NewReader(src))
-	dec.UseNumber()
-	var ds []rune // stack of separators
-	var cnt int
-	var sanitize bool
-	var prevDelim byte
-	for {
-		var delim byte = comma
-		t, err := dec.Token()
-		if err == io.EOF {
-			return dst, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		switch v := t.(type) {
-		case string:
-			if sanitize && prevDelim == ':' {
-				v = Mask
-				sanitize = false
-			}
-			if cnt%2 != 0 && len(ds) > 0 && ds[len(ds)-1] == '{' {
-				delim = colon
-				if _, ok := fset[v]; ok || (re != nil && re.MatchString(v)) {
-					sanitize = true
-				}
-			}
-			dst = strconv.AppendQuote(dst, v)
-		case bool:
-			dst = strconv.AppendBool(dst, v)
-		case json.Delim:
-			switch v {
-			case '{', '[':
-				ds = append(ds, rune(v))
-			case '}', ']':
-				if len(ds) > 0 {
-					ds = ds[:len(ds)-1]
-				}
-			}
-			cnt = 0
-			prevDelim = 0
-			dst = append(dst, byte(v))
-		case json.Number:
-			dst = append(dst, string(v)...)
-		case nil:
-			dst = append(dst, "null"...)
-		default:
-			return nil, fmt.Errorf("unknown json token: %v", v)
-		}
-		cnt++
-		if dec.More() {
-			if v, ok := t.(json.Delim); !ok || v == '}' || v == ']' {
-				prevDelim = delim
-				dst = append(dst, delim, ' ')
-			}
-		}
-	}
-}
-
 // FieldFunc is called on each string attribute of JSON object processed by
 // MessageFunc. Arguments provided are key/value pair of JSON payload, if
 // function returns true for doReplace, attribute value is substituted by
@@ -177,9 +104,9 @@ type FieldFunc func(key, value string) (newValue string, doReplace bool)
 // representation. If dst is non-nil, it is used as a scratch buffer to reduce
 // allocations. fn must be a non-nil FieldFunc called on each string key/value
 // pair of json payload.
-func MessageFunc(dst, src []byte, fn FieldFunc) ([]byte, error) {
+func Message(dst, src []byte, fn FieldFunc) ([]byte, error) {
 	if fn == nil {
-		return nil, errors.New("sanitize: fn cannot not be nil")
+		return nil, errInvalidArguents
 	}
 	if len(dst) > 0 {
 		dst = dst[:0]
@@ -245,7 +172,7 @@ func MessageFunc(dst, src []byte, fn FieldFunc) ([]byte, error) {
 	}
 }
 
-// Mask replaces sensitive fields
+// Mask is a placeholder to replace sensitive fields
 const Mask = "********"
 
 const (
