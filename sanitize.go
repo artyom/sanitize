@@ -167,6 +167,84 @@ func Message(dst, src []byte, fset map[string]struct{}, re *regexp.Regexp) ([]by
 	}
 }
 
+// FieldFunc is called on each string attribute of JSON object processed by
+// MessageFunc. Arguments provided are key/value pair of JSON payload, if
+// function returns true for doReplace, attribute value is substituted by
+// newValue.
+type FieldFunc func(key, value string) (newValue string, doReplace bool)
+
+// MessageFunc sanitizes json payload from src and returns its sanitized
+// representation. If dst is non-nil, it is used as a scratch buffer to reduce
+// allocations. fn must be a non-nil FieldFunc called on each string key/value
+// pair of json payload.
+func MessageFunc(dst, src []byte, fn FieldFunc) ([]byte, error) {
+	if fn == nil {
+		return nil, errors.New("sanitize: fn cannot not be nil")
+	}
+	if len(dst) > 0 {
+		dst = dst[:0]
+	}
+	dec := json.NewDecoder(bytes.NewReader(src))
+	dec.UseNumber()
+	var ds []rune // stack of separators
+	var cnt int
+	var sanitize bool
+	var prevDelim byte
+	var key string
+	for {
+		var delim byte = comma
+		t, err := dec.Token()
+		if err == io.EOF {
+			return dst, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		switch v := t.(type) {
+		case string:
+			if sanitize && prevDelim == ':' {
+				if val, ok := fn(key, v); ok {
+					v = val
+				}
+				sanitize = false
+			}
+			if cnt%2 != 0 && len(ds) > 0 && ds[len(ds)-1] == '{' {
+				delim = colon
+				key = v
+				sanitize = true
+			}
+			dst = strconv.AppendQuote(dst, v)
+		case bool:
+			dst = strconv.AppendBool(dst, v)
+		case json.Delim:
+			switch v {
+			case '{', '[':
+				ds = append(ds, rune(v))
+			case '}', ']':
+				if len(ds) > 0 {
+					ds = ds[:len(ds)-1]
+				}
+			}
+			cnt = 0
+			prevDelim = 0
+			dst = append(dst, byte(v))
+		case json.Number:
+			dst = append(dst, string(v)...)
+		case nil:
+			dst = append(dst, "null"...)
+		default:
+			return nil, fmt.Errorf("unknown json token: %v", v)
+		}
+		cnt++
+		if dec.More() {
+			if v, ok := t.(json.Delim); !ok || v == '}' || v == ']' {
+				prevDelim = delim
+				dst = append(dst, delim, ' ')
+			}
+		}
+	}
+}
+
 // Mask replaces sensitive fields
 const Mask = "********"
 
