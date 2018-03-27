@@ -88,7 +88,7 @@ func Stream(w io.Writer, r io.Reader, fn FieldFunc) error {
 		if dec.More() {
 			if v, ok := t.(json.Delim); !ok || v == '}' || v == ']' {
 				prevDelim = delim
-				bw.Write([]byte{delim, ' '})
+				bw.WriteByte(delim)
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func Message(dst, src []byte, fn FieldFunc) ([]byte, error) {
 		if dec.More() {
 			if v, ok := t.(json.Delim); !ok || v == '}' || v == ']' {
 				prevDelim = delim
-				dst = append(dst, delim, ' ')
+				dst = append(dst, delim)
 			}
 		}
 	}

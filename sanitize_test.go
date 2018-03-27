@@ -13,7 +13,7 @@ import (
 )
 
 const input = `{"Msg": "Hi", "Obj": {"a":1, "c":"C", "b":null}, "Arr": ["a","b","c"], "Null": null, "Num": 1.234}`
-const want = `{"Msg": "********", "Obj": {"a": 1, "c": "********", "b": null}, "Arr": ["a", "b", "c"], "Null": null, "Num": 1.234}`
+const want = `{"Msg":"********","Obj":{"a":1,"c":"********","b":null},"Arr":["a","b","c"],"Null":null,"Num":1.234}`
 
 var fn = func(key, val string) (string, bool) {
 	switch key {
@@ -161,5 +161,5 @@ func Example() {
 	}
 	fmt.Println(string(out))
 	// Output:
-	// {"ID": 42, "Name": "********", "Secret": "********"}
+	// {"ID":42,"Name":"********","Secret":"********"}
 }
