@@ -96,9 +96,9 @@ func Stream(w io.Writer, r io.Reader, fn FieldFunc) error {
 
 // FieldFunc is called on each string attribute of JSON object processed by
 // MessageFunc. Arguments provided are key/value pair of JSON payload, if
-// function returns true for doReplace, attribute value is substituted by
+// function returns true for mask, attribute value is substituted by
 // newValue.
-type FieldFunc func(key, value string) (newValue string, doReplace bool)
+type FieldFunc func(key, value string) (newValue string, mask bool)
 
 // Message sanitizes json payload from src and returns its sanitized
 // representation. If dst is non-nil, it is used as a scratch buffer to reduce
