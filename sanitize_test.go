@@ -87,9 +87,6 @@ func BenchmarkMessage_Custom(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	if !json.Valid(src) {
-		b.Fatalf("file %q does not contain valid json", name)
-	}
 	fset := make(map[string]struct{})
 	for _, f := range strings.Split(fields, ",") {
 		fset[f] = struct{}{}
@@ -120,9 +117,6 @@ func BenchmarkStream_Custom(b *testing.B) {
 	src, err := ioutil.ReadFile(name)
 	if err != nil {
 		b.Fatal(err)
-	}
-	if !json.Valid(src) {
-		b.Fatalf("file %q does not contain valid json", name)
 	}
 	fset := make(map[string]struct{})
 	for _, f := range strings.Split(fields, ",") {
