@@ -23,6 +23,17 @@ var fn = func(key, val string) (string, bool) {
 	return "", false
 }
 
+func TestMessageEscapedUnicode(t *testing.T) {
+	input := `{"foo":"foo\u0007bar"}`
+	dst, err := sanitize.Message(nil, []byte(input), fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(dst) {
+		t.Fatal("invalid output:", string(dst))
+	}
+}
+
 func TestMessage(t *testing.T) {
 	dst, err := sanitize.Message(nil, []byte(input), fn)
 	if err != nil {

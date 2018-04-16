@@ -34,7 +34,6 @@ func Stream(w io.Writer, r io.Reader, fn FieldFunc) error {
 	var cnt int
 	var sanitize bool
 	var prevDelim byte
-	var tmp []byte
 	var key string
 	for {
 		var delim byte = comma
@@ -58,7 +57,8 @@ func Stream(w io.Writer, r io.Reader, fn FieldFunc) error {
 				key = v
 				sanitize = true
 			}
-			bw.Write(strconv.AppendQuote(tmp[:0], v))
+			tmp, _ := json.Marshal(v)
+			bw.Write(tmp)
 		case bool:
 			if v {
 				bw.WriteString("true")
@@ -140,7 +140,8 @@ func Message(dst, src []byte, fn FieldFunc) ([]byte, error) {
 				key = v
 				sanitize = true
 			}
-			dst = strconv.AppendQuote(dst, v)
+			tmp, _ := json.Marshal(v)
+			dst = append(dst, tmp...)
 		case bool:
 			dst = strconv.AppendBool(dst, v)
 		case json.Delim:
